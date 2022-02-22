@@ -1,0 +1,151 @@
+#include config
+#include utils
+
+local music_cartridge_zone = getObjectFromGUID(music_cartridge_zone_guid)
+local arena_active_zones = {}
+local selected_music_event_index
+local now_playing
+
+function onLoad()
+  for _, arena_active_zone_guid in pairs(arena_active_zone_guids) do
+    table.insert(arena_active_zones, getObjectFromGUID(arena_active_zone_guid))
+  end
+
+  button_params = {
+    function_owner = self,
+    scale          = {0.5, 1, 0.5},
+    font_size      = 80,
+    font_color     = WHITE_COLOUR,
+    hover_color    = LIGHT_WOOD_COLOUR,
+    press_color    = LIGHT_WOOD_COLOUR
+  }
+  text_params = {
+    click_function = "dummy_button",
+    function_owner = self,
+    position       = {0, 0.2, 0},
+    scale          = {0.5, 1, 0.5},
+    width          = 0,
+    height         = 0,
+    font_size      = 100,
+    font_color     = WHITE_COLOUR
+  }
+  -- Music Event Buttons
+  for i = 0, 5 do
+    button_params.click_function = "music_event_button_" .. i
+    self:createButton(button_params)
+  end
+  self:createButton(text_params)
+
+  self.editButton({index=0, position={-0.8125, 0.2, -0.825}})
+  self.editButton({index=1, position={-0.8125, 0.2, -0.550}})
+  self.editButton({index=2, position={-0.8125, 0.2, -0.275}})
+  self.editButton({index=3, position={0.8125, 0.2, -0.825}})
+  self.editButton({index=4, position={0.8125, 0.2, -0.550}})
+  self.editButton({index=5, position={0.8125, 0.2, -0.275}})
+
+  update_panel()
+end
+
+function music_event_button_0() music_event_button(1) end
+function music_event_button_1() music_event_button(2) end
+function music_event_button_2() music_event_button(3) end
+function music_event_button_3() music_event_button(4) end
+function music_event_button_4() music_event_button(5) end
+function music_event_button_5() music_event_button(6) end
+
+function music_event_button(index)
+  if index == selected_music_event_index then
+    MusicPlayer:pause()
+    MusicPlayer.repeat_track = false
+    selected_music_event_index = nil
+    now_playing = nil
+  else
+    MusicPlayer:setCurrentAudioclip(MUSIC_EVENTS[index])
+    MusicPlayer.repeat_track = true
+    selected_music_event_index = index
+    now_playing = 'Now Playing: "' .. MUSIC_EVENTS[index]["title"] .. '"'
+  end
+  update_panel()
+end
+
+function update_playlist()
+  local music_cartridge = get_object(music_cartridge_zone)
+  -- The music cartridge has been removed
+  if not music_cartridge then
+    -- There is no music event playing
+    if not selected_music_event_index then
+      MusicPlayer:pause()
+      now_playing = nil
+    end
+    return
+  end
+  local playlist = music_cartridge:getVar("playlist")
+  MusicPlayer:setPlaylist(playlist)
+  -- The music cartridge is in place and there is not a music event playing
+  if not selected_music_event_index then
+    now_playing = 'Now Playing Playlist: "' .. music_cartridge:getName() .. '"'
+    local loaded_playlist = MusicPlayer:getPlaylist()
+    -- Only start the playlist if something is not already playing
+    if MusicPlayer.player_status ~= "Play" then
+      local index = math.random(1, len(loaded_playlist))
+      MusicPlayer:setCurrentAudioclip(loaded_playlist[index])
+    end
+  end
+end
+
+--
+--
+--
+
+function is_music_event_playing()
+  return selected_music_event_index ~= nil
+end
+
+function is_arena_active_zone_empty(arena_active_zone)
+  local pokemon = get_object(arena_active_zone)
+  return pokemon == nil
+end
+
+function is_arena_empty()
+  for _, arena_active_zone in pairs(arena_active_zones) do
+    if not is_arena_active_zone_empty(arena_active_zone) then
+      return false
+    end
+  end
+  return true
+end
+
+function update_panel()
+  -- Stop any music events when the arena is vacated
+  if is_arena_empty() and selected_music_event_index then
+    MusicPlayer:pause()
+    MusicPlayer.repeat_track = false
+    selected_music_event_index = nil
+    now_playing = nil
+  end
+
+  update_playlist()
+
+  for i = 0, 5 do
+    local label = MUSIC_EVENTS[i + 1]["title"]
+    local width = 750
+    local height = 200
+    local color = WOOD_COLOUR
+    local tooltip = "Play Music"
+
+    if i + 1 == selected_music_event_index then
+      color = {75/255, 200/255, 150/255}
+      tooltip = "Stop Music"
+    elseif is_arena_empty() then
+      label = ""
+      width = 0
+      height = 0
+    end
+    self:editButton({index=i, label=label, width=width, height=height, color=color, tooltip=tooltip})
+  end
+
+  if not now_playing then
+    now_playing = "Music Box"
+  end
+  self:editButton({index=6, label=now_playing})
+end
